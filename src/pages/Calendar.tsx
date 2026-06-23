@@ -192,20 +192,18 @@ export default function Calendar() {
       }
 
       if (data) {
+        const newEv: UnifiedEvent = {
+          id: data.id,
+          title: data.title,
+          start: data.start_time,
+          end: data.end_time,
+          location: data.location,
+          description: data.description,
+          source: "local",
+          color: data.color,
+        };
         setEvents((prev) =>
-          [
-            ...prev,
-            {
-              id: data.id,
-              title: data.title,
-              start: data.start_time,
-              end: data.end_time,
-              location: data.location,
-              description: data.description,
-              source: "local",
-              color: data.color,
-            },
-          ].sort((a, b) => a.start.localeCompare(b.start)),
+          [...prev, newEv].sort((a, b) => a.start.localeCompare(b.start)),
         );
       }
     } finally {

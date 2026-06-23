@@ -80,7 +80,7 @@ export default function Projects() {
   const [newTodo, setNewTodo] = useState({
     title: "",
     due_date: "",
-    priority: "medium" as const,
+    priority: "medium" as "high" | "medium" | "low",
   });
   const [expandedArea, setExpandedArea] = useState<string | null>(null);
   const [tab, setTab] = useState<"board" | "analysis">("board");

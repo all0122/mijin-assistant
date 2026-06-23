@@ -311,7 +311,6 @@ export default function Todos() {
                 <div
                   style={{
                     fontSize: 17,
-                    color: "#1d1d1f",
                     letterSpacing: "-0.374px",
                     textDecoration: todo.completed ? "line-through" : "none",
                     color: todo.completed ? "#7a7a7a" : "#1d1d1f",

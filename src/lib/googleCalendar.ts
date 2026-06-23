@@ -4,7 +4,6 @@ const DISCOVERY_DOC =
 
 let tokenClient: google.accounts.oauth2.TokenClient | null = null;
 let gapiInited = false;
-let gisInited = false;
 
 export function getClientId(): string {
   return localStorage.getItem("google_client_id") || "";
@@ -42,7 +41,6 @@ export function initGis(clientId: string): void {
       }
     },
   });
-  gisInited = true;
 }
 
 export function requestToken(): void {

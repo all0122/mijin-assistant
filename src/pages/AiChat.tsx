@@ -5,42 +5,28 @@ import type { Message } from "../lib/types";
 import MiJin from "../components/MiJin";
 import dayjs from "dayjs";
 
-const SYSTEM_PROMPT = `당신은 사용자의 개인 AI 비서입니다. 한국어로 친근하고 간결하게 답변하세요.
-
-사용자의 일정, 할일, 메모, 연락처를 관리하는 앱의 비서입니다.
-현재 날짜: ${dayjs().format("YYYY년 M월 D일 dddd")}
-
-다음과 같은 일을 도울 수 있습니다:
-- 일정/할일/메모 추가 방법 안내
-- 우선순위 조언
-- 일정 정리 및 계획 수립
-- 업무 관련 조언 및 아이디어
-- 일반적인 질문 답변
-
-답변은 핵심만 간결하게 해주세요.`;
-
 const QUICK = [
-  "오늘 할일 정리해줘",
-  "이번 주 계획 세우는 법 알려줘",
-  "집중력 높이는 팁",
-  "업무 우선순위 정하는 방법",
+  "이번 주 제일 중요한 게 뭐야?",
+  "데드라인 임박한 거 알려줘",
+  "지금 뭐 하면 좋을까?",
+  "오늘 시간 계획 짜줘",
 ];
 
-export default function AiChat() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content:
-        "안녕하세요! 저는 당신의 AI 비서예요 🤖\n\n일정 추가, 할일 정리, 아이디어 정리 등 무엇이든 도와드릴게요. 무엇을 도와드릴까요?",
-    },
-  ]);
+interface Props {
+  onNavigate?: (page: string) => void;
+}
+
+export default function AiChat({ onNavigate }: Props) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [todoCount, setTodoCount] = useState(0);
   const [eventCount, setEventCount] = useState(0);
+  const [isNearBottom, setIsNearBottom] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setApiKey(localStorage.getItem("anthropic_api_key") || "");
@@ -48,8 +34,17 @@ export default function AiChat() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    if (isNearBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, loading, isNearBottom]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setIsNearBottom(nearBottom);
+  };
 
   const loadContext = async () => {
     const today = dayjs().format("YYYY-MM-DD");
@@ -86,10 +81,22 @@ export default function AiChat() {
     const userMsg: Message = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setIsNearBottom(true);
     setLoading(true);
     try {
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-      const contextNote = `\n\n[현재 상태: 미완료 할일 ${todoCount}개, 예정 일정 ${eventCount}개]`;
+      const systemPrompt = `당신은 미진님의 전담 개인 비서입니다. 오늘은 ${dayjs().format("YYYY년 M월 D일 dddd")}입니다.
+
+현재 미진님 상황: 미완료 할일 ${todoCount}개, 예정 일정 ${eventCount}개
+
+비서로서 역할:
+- 미진님 대신 우선순위를 판단하고 "이것부터 하세요"처럼 구체적으로 알려줍니다
+- 데드라인이 임박한 일, 놓치면 안 될 일을 먼저 짚어줍니다
+- 여유 시간이 생기면 그 시간에 맞는 일을 추천합니다
+- 평가하거나 분석하지 않고, 실제로 도움이 되는 행동만 제안합니다
+- 잡담, 고민, 아이디어도 함께 이야기합니다
+
+말투: 친근하고 간결하게. "~하시는 게 어떨까요?" 대신 "~하는 게 좋겠어요"처럼 적극적으로.`;
       const history = [...messages, userMsg].map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
@@ -97,7 +104,7 @@ export default function AiChat() {
       const response = await client.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 1024,
-        system: SYSTEM_PROMPT + contextNote,
+        system: systemPrompt,
         messages: history,
       });
       const reply =
@@ -121,11 +128,18 @@ export default function AiChat() {
     }
   };
 
+  const greeting =
+    todoCount > 0 || eventCount > 0
+      ? `안녕하세요 미진님! 할일 ${todoCount}개, 일정 ${eventCount}개가 있어요.\n\n뭐부터 챙겨드릴까요?`
+      : "안녕하세요 미진님! 오늘 필요한 거 뭐든지 말씀해 주세요.";
+
+  const displayMessages =
+    messages.length === 0
+      ? [{ role: "assistant" as const, content: greeting }]
+      : messages;
+
   return (
-    <div
-      className="flex flex-col max-w-2xl mx-auto"
-      style={{ height: "calc(100vh - 0px)" }}
-    >
+    <div className="flex flex-col max-w-2xl mx-auto h-[calc(100dvh-80px)] md:h-dvh">
       {/* 헤더 */}
       <div
         className="px-6 py-5 shrink-0"
@@ -155,10 +169,12 @@ export default function AiChat() {
 
       {/* 메시지 영역 */}
       <div
+        ref={scrollRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 py-5 space-y-4 scrollbar-hide"
         style={{ background: "#f5f5f7" }}
       >
-        {messages.map((msg, i) => (
+        {displayMessages.map((msg, i) => (
           <div
             key={i}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
@@ -213,7 +229,7 @@ export default function AiChat() {
       </div>
 
       {/* 빠른 질문 */}
-      {messages.length <= 1 && (
+      {messages.length === 0 && (
         <div
           className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-hide shrink-0"
           style={{ background: "#f5f5f7" }}
@@ -246,17 +262,39 @@ export default function AiChat() {
       {/* API 키 미설정 경고 */}
       {!apiKey && (
         <div
-          className="mx-4 mb-2"
+          className="mx-4 mb-2 flex items-center justify-between gap-3"
           style={{
             fontSize: 13,
             color: "#7a7a7a",
-            background: "#fff",
-            border: "1px solid #e0e0e0",
+            background: "#fff8ed",
+            border: "1px solid #fcd34d",
             borderRadius: 11,
             padding: "10px 14px",
           }}
         >
-          ⚠️ 설정에서 Claude API 키를 입력해야 AI 기능을 사용할 수 있어요.
+          <span>
+            ⚠️ Claude API 키가 필요해요.{" "}
+            <span style={{ color: "#aaa" }}>
+              (새 기기에서는 매번 입력해야 해요)
+            </span>
+          </span>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate("settings")}
+              style={{
+                fontSize: 13,
+                color: "#0066cc",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                fontWeight: 600,
+                padding: 0,
+              }}
+            >
+              설정 →
+            </button>
+          )}
         </div>
       )}
 

@@ -10,6 +10,7 @@ import Memos from "./pages/Memos";
 import Contacts from "./pages/Contacts";
 import AiChat from "./pages/AiChat";
 import Settings from "./pages/Settings";
+import News from "./pages/News";
 import type { Page } from "./lib/types";
 
 export default function App() {
@@ -32,7 +33,9 @@ export default function App() {
       case "contacts":
         return <Contacts />;
       case "ai":
-        return <AiChat />;
+        return <AiChat onNavigate={(p) => setPage(p as Page)} />;
+      case "news":
+        return <News />;
       case "settings":
         return <Settings />;
     }

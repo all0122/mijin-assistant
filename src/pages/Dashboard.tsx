@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import type { Todo, Event } from "../lib/types";
+import type { Todo, Event, NewsItem } from "../lib/types";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import MiJin from "../components/MiJin";
@@ -14,35 +14,44 @@ export default function Dashboard({ onNavigate }: Props) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [doneTodos, setDoneTodos] = useState<Todo[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [newsPreview, setNewsPreview] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const today = dayjs().format("YYYY-MM-DD");
-      const [{ data: t }, { data: done }, { data: e }] = await Promise.all([
-        supabase
-          .from("todos")
-          .select("*")
-          .eq("completed", false)
-          .order("due_date", { ascending: true })
-          .limit(10),
-        supabase
-          .from("todos")
-          .select("*")
-          .eq("completed", true)
-          .gte("updated_at", today + "T00:00:00")
-          .order("updated_at", { ascending: false })
-          .limit(10),
-        supabase
-          .from("events")
-          .select("*")
-          .gte("start_time", today + "T00:00:00")
-          .order("start_time", { ascending: true })
-          .limit(5),
-      ]);
+      const [{ data: t }, { data: done }, { data: e }, { data: news }] =
+        await Promise.all([
+          supabase
+            .from("todos")
+            .select("*")
+            .eq("completed", false)
+            .order("due_date", { ascending: true })
+            .limit(10),
+          supabase
+            .from("todos")
+            .select("*")
+            .eq("completed", true)
+            .gte("updated_at", today + "T00:00:00")
+            .order("updated_at", { ascending: false })
+            .limit(10),
+          supabase
+            .from("events")
+            .select("*")
+            .gte("start_time", today + "T00:00:00")
+            .order("start_time", { ascending: true })
+            .limit(5),
+          supabase
+            .from("news_items")
+            .select("*")
+            .eq("fetched_date", today)
+            .order("created_at", { ascending: true })
+            .limit(4),
+        ]);
       setTodos(t || []);
       setDoneTodos(done || []);
       setEvents(e || []);
+      setNewsPreview((news || []) as NewsItem[]);
       setLoading(false);
     }
     load();
@@ -402,6 +411,100 @@ export default function Dashboard({ onNavigate }: Props) {
           </p>
         </section>
       )}
+
+      {/* 오늘의 뉴스 미리보기 */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h3
+            style={{
+              fontSize: 21,
+              fontWeight: 600,
+              color: "#1d1d1f",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            오늘의 뉴스
+          </h3>
+          <button
+            onClick={() => onNavigate("news")}
+            style={{
+              fontSize: 14,
+              color: "#0066cc",
+              letterSpacing: "-0.224px",
+            }}
+          >
+            전체 보기
+          </button>
+        </div>
+        {newsPreview.length === 0 ? (
+          <button
+            onClick={() => onNavigate("news")}
+            className="w-full text-left transition-all active:scale-95"
+            style={{
+              padding: "16px 20px",
+              background: "#ffffff",
+              border: "1px solid #e0e0e0",
+              borderRadius: 18,
+              fontSize: 15,
+              color: "#7a7a7a",
+              letterSpacing: "-0.374px",
+              cursor: "pointer",
+            }}
+          >
+            📰 오늘의 뉴스 가져오기 →
+          </button>
+        ) : (
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e0e0e0",
+              borderRadius: 18,
+              overflow: "hidden",
+            }}
+          >
+            {newsPreview.map((item, i) => (
+              <a
+                key={item.id}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-3 px-5 py-4"
+                style={{
+                  borderTop: i > 0 ? "1px solid #f0f0f0" : "none",
+                  textDecoration: "none",
+                  display: "flex",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#fff",
+                    background:
+                      item.category === "realestate" ? "#0066cc" : "#34c759",
+                    borderRadius: 4,
+                    padding: "2px 6px",
+                    whiteSpace: "nowrap",
+                    marginTop: 3,
+                    flexShrink: 0,
+                  }}
+                >
+                  {item.category === "realestate" ? "부동산" : "갱년기"}
+                </span>
+                <span
+                  style={{
+                    fontSize: 15,
+                    color: "#1d1d1f",
+                    letterSpacing: "-0.374px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item.title}
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* AI 비서 */}
       <button

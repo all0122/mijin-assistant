@@ -7,6 +7,7 @@ interface Props {
 
 const nav: { id: Page; label: string; icon: string; badge?: string }[] = [
   { id: "dashboard", label: "대시보드", icon: "🏠" },
+  { id: "news", label: "뉴스", icon: "📰" },
   { id: "content", label: "콘텐츠", icon: "🎬", badge: "NEW" },
   { id: "projects", label: "내 업무", icon: "🗂️" },
   { id: "calendar", label: "캘린더", icon: "📅" },
@@ -18,7 +19,7 @@ const nav: { id: Page; label: string; icon: string; badge?: string }[] = [
 
 const mobileNav: { id: Page; label: string; icon: string }[] = [
   { id: "dashboard", label: "홈", icon: "🏠" },
-  { id: "content", label: "콘텐츠", icon: "🎬" },
+  { id: "news", label: "뉴스", icon: "📰" },
   { id: "calendar", label: "캘린더", icon: "📅" },
   { id: "projects", label: "업무", icon: "🗂️" },
   { id: "ai", label: "AI", icon: "🤖" },

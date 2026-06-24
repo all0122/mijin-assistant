@@ -65,6 +65,18 @@ export interface ContentItem {
   updated_at: string;
 }
 
+export interface NewsItem {
+  id: string;
+  category: "realestate" | "menopause";
+  title: string;
+  description: string;
+  url: string;
+  naver_url: string;
+  published_at: string;
+  fetched_date: string;
+  created_at: string;
+}
+
 export type Page =
   | "dashboard"
   | "projects"
@@ -74,4 +86,5 @@ export type Page =
   | "memos"
   | "contacts"
   | "ai"
+  | "news"
   | "settings";

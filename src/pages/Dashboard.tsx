@@ -310,63 +310,74 @@ export default function Dashboard({ onNavigate }: Props) {
             전체 보기
           </button>
         </div>
-        {events.length === 0 ? (
-          <p
-            style={{
-              fontSize: 17,
-              color: "#7a7a7a",
-              textAlign: "center",
-              padding: "32px 0",
-            }}
-          >
-            예정된 일정이 없어요
-          </p>
-        ) : (
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e0e0e0",
-              borderRadius: 18,
-              overflow: "hidden",
-            }}
-          >
-            {events.map((ev, i) => (
-              <div
-                key={ev.id}
-                className="flex items-center gap-4 px-5 py-4"
-                style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}
-              >
+        {(() => {
+          const today = dayjs().startOf("day");
+          const displayEvents = events.filter(
+            (ev) => !ev.completed || dayjs(ev.start_time).isSame(today, "day"),
+          );
+          return displayEvents.length === 0 ? (
+            <p
+              style={{
+                fontSize: 17,
+                color: "#7a7a7a",
+                textAlign: "center",
+                padding: "32px 0",
+              }}
+            >
+              예정된 일정이 없어요
+            </p>
+          ) : (
+            <div
+              style={{
+                background: "#ffffff",
+                border: "1px solid #e0e0e0",
+                borderRadius: 18,
+                overflow: "hidden",
+              }}
+            >
+              {displayEvents.map((ev, i) => (
                 <div
-                  className="w-1 rounded-full shrink-0"
-                  style={{ height: 40, background: "#0066cc" }}
-                />
-                <div className="flex-1 min-w-0">
+                  key={ev.id}
+                  className="flex items-center gap-4 px-5 py-4"
+                  style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}
+                >
                   <div
+                    className="w-1 rounded-full shrink-0"
                     style={{
-                      fontSize: 17,
-                      color: "#1d1d1f",
-                      letterSpacing: "-0.374px",
+                      height: 40,
+                      background: ev.completed ? "#cccccc" : "#0066cc",
                     }}
-                    className="truncate"
-                  >
-                    {ev.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      color: "#7a7a7a",
-                      letterSpacing: "-0.224px",
-                      marginTop: 2,
-                    }}
-                  >
-                    {dayjs(ev.start_time).format("M월 D일 HH:mm")}
-                    {ev.location && ` · ${ev.location}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div
+                      style={{
+                        fontSize: 17,
+                        color: ev.completed ? "#7a7a7a" : "#1d1d1f",
+                        letterSpacing: "-0.374px",
+                        textDecoration: ev.completed ? "line-through" : "none",
+                      }}
+                      className="truncate"
+                    >
+                      {ev.completed && "✓ "}
+                      {ev.title}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        color: "#7a7a7a",
+                        letterSpacing: "-0.224px",
+                        marginTop: 2,
+                      }}
+                    >
+                      {dayjs(ev.start_time).format("M월 D일 HH:mm")}
+                      {ev.location && ` · ${ev.location}`}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </section>
 
       {/* 오늘 완료한 항목 */}

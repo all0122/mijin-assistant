@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 import type { Message, Todo, Event } from "../lib/types";
 import MiJin from "../components/MiJin";
 import dayjs from "dayjs";
+import "dayjs/locale/ko";
+dayjs.locale("ko");
 
 const QUICK = [
   "이번 주 제일 중요한 게 뭐야?",
@@ -117,7 +119,7 @@ export default function AiChat({ onNavigate }: Props) {
               )
               .join("\n");
 
-      const systemPrompt = `당신은 미진님의 전담 개인 비서입니다. 오늘은 ${dayjs().format("YYYY년 M월 D일 dddd")}입니다.
+      const systemPrompt = `당신은 미진님의 전담 개인 비서입니다. 지금은 ${dayjs().format("YYYY년 M월 D일 dddd A h시 mm분")}입니다.
 
 【미진님의 할일 목록】
 ${todoList}

@@ -396,7 +396,7 @@ export default function Todos() {
                   <button
                     onClick={() => postpone(todo)}
                     title="내일로 미루기"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                     style={{
                       fontSize: 14,
                       background: "none",
@@ -411,7 +411,7 @@ export default function Todos() {
                 )}
                 <button
                   onClick={() => remove(todo.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                   style={{
                     color: "#cccccc",
                     fontSize: 20,

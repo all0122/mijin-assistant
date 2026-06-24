@@ -1,16 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import type { Area } from "../lib/types";
 import Anthropic from "@anthropic-ai/sdk";
 import dayjs from "dayjs";
-
-interface Area {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  description: string;
-  sort_order: number;
-}
 
 interface AreaTodo {
   id: string;
@@ -108,8 +100,12 @@ export default function Projects() {
     setAnalysis(aiData?.[0] || null);
   };
 
-  const todosForArea = (areaId: string) =>
-    todos.filter((t) => t.area_id === areaId);
+  const todosForArea = (areaId: string) => {
+    const area = areas.find((a) => a.id === areaId);
+    return todos.filter(
+      (t) => t.area_id === areaId || (t.project === area?.name && !t.area_id),
+    );
+  };
 
   const activeTodos = (areaId: string) =>
     todosForArea(areaId).filter((t) => !t.completed);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../lib/supabase";
-import type { Todo, Event, NewsItem } from "../lib/types";
+import type { Area, Todo, Event, NewsItem } from "../lib/types";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import MiJin from "../components/MiJin";
@@ -16,6 +16,8 @@ export default function Dashboard({ onNavigate }: Props) {
   const [doneTodos, setDoneTodos] = useState<Todo[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [newsPreview, setNewsPreview] = useState<NewsItem[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [allPendingTodos, setAllPendingTodos] = useState<Todo[]>([]);
   const [suggestion, setSuggestion] = useState<string>("");
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -104,6 +106,21 @@ export default function Dashboard({ onNavigate }: Props) {
       setDoneTodos(done || []);
       setEvents(eventData);
       setNewsPreview((news || []) as NewsItem[]);
+
+      // 프로젝트별 섹션용: areas + 전체 미완료 todos
+      const [{ data: aData }, { data: allT }] = await Promise.all([
+        supabase
+          .from("areas")
+          .select("id, name, icon, sort_order")
+          .order("sort_order"),
+        supabase
+          .from("todos")
+          .select("id, title, area_id, project")
+          .eq("completed", false),
+      ]);
+      setAreas((aData || []) as Area[]);
+      setAllPendingTodos((allT || []) as Todo[]);
+
       setLoading(false);
       loadSuggestion(todoData, eventData, today);
     }
@@ -495,6 +512,84 @@ export default function Dashboard({ onNavigate }: Props) {
           </div>
         )}
       </section>
+
+      {/* 프로젝트별 남은 할일 */}
+      {areas.some((area) =>
+        allPendingTodos.some(
+          (t) =>
+            t.area_id === area.id || (t.project === area.name && !t.area_id),
+        ),
+      ) && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h3
+              style={{
+                fontSize: 21,
+                fontWeight: 600,
+                color: "#1d1d1f",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              프로젝트별
+            </h3>
+            <button
+              onClick={() => onNavigate("projects")}
+              style={{
+                fontSize: 14,
+                color: "#0066cc",
+                letterSpacing: "-0.224px",
+              }}
+            >
+              전체 보기
+            </button>
+          </div>
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e0e0e0",
+              borderRadius: 18,
+              overflow: "hidden",
+            }}
+          >
+            {areas
+              .map((area) => ({
+                area,
+                count: allPendingTodos.filter(
+                  (t) =>
+                    t.area_id === area.id ||
+                    (t.project === area.name && !t.area_id),
+                ).length,
+              }))
+              .filter(({ count }) => count > 0)
+              .map(({ area, count }, i) => (
+                <div
+                  key={area.id}
+                  className="flex items-center justify-between px-5 py-4"
+                  style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}
+                >
+                  <span
+                    style={{
+                      fontSize: 16,
+                      color: "#1d1d1f",
+                      letterSpacing: "-0.374px",
+                    }}
+                  >
+                    {area.icon} {area.name}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      color: "#ff9500",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {count}개
+                  </span>
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
 
       {/* 예정 일정 */}
       <section>

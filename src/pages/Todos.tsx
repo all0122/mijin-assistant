@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import MiJin from "../components/MiJin";
 import { supabase } from "../lib/supabase";
-import type { Todo } from "../lib/types";
+import type { Area, Todo } from "../lib/types";
 import dayjs from "dayjs";
 
 const PRIORITIES = ["high", "medium", "low"] as const;
@@ -23,6 +23,7 @@ const empty = (): Omit<Todo, "id" | "created_at"> => ({
   completed: false,
   priority: "medium",
   project: "",
+  area_id: "",
 });
 
 const inputStyle: React.CSSProperties = {
@@ -39,17 +40,22 @@ const inputStyle: React.CSSProperties = {
 
 export default function Todos() {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [filter, setFilter] = useState<"all" | "active" | "done">("active");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty());
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase
-      .from("todos")
-      .select("*")
-      .order("created_at", { ascending: false });
-    setTodos(data || []);
+    const [{ data: todosData }, { data: areasData }] = await Promise.all([
+      supabase
+        .from("todos")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase.from("areas").select("*").order("sort_order"),
+    ]);
+    setTodos(todosData || []);
+    setAreas(areasData || []);
   };
 
   useEffect(() => {
@@ -133,6 +139,7 @@ export default function Todos() {
         ...form,
         due_date: form.due_date || null,
         project: form.project || null,
+        area_id: form.area_id || null,
       })
       .select()
       .single();
@@ -141,8 +148,6 @@ export default function Todos() {
     setShowForm(false);
     setSaving(false);
   };
-
-  const projects = [...new Set(todos.map((t) => t.project).filter(Boolean))];
 
   return (
     <div className="max-w-2xl mx-auto py-10 px-6">
@@ -245,18 +250,25 @@ export default function Todos() {
               ))}
             </select>
           </div>
-          <input
-            placeholder="프로젝트 (선택)"
-            value={form.project}
-            list="projects"
-            onChange={(e) => setForm({ ...form, project: e.target.value })}
+          <select
+            value={form.area_id}
+            onChange={(e) => {
+              const area = areas.find((a) => a.id === e.target.value);
+              setForm({
+                ...form,
+                area_id: e.target.value,
+                project: area?.name || "",
+              });
+            }}
             style={inputStyle}
-          />
-          <datalist id="projects">
-            {projects.map((p) => (
-              <option key={p} value={p!} />
+          >
+            <option value="">프로젝트 없음</option>
+            {areas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.icon} {a.name}
+              </option>
             ))}
-          </datalist>
+          </select>
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => {

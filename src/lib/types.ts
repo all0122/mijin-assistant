@@ -10,6 +10,15 @@ export interface Event {
   created_at: string;
 }
 
+export interface Area {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
+  sort_order: number;
+}
+
 export interface Todo {
   id: string;
   title: string;
@@ -18,6 +27,7 @@ export interface Todo {
   completed: boolean;
   priority: "low" | "medium" | "high";
   project?: string;
+  area_id?: string;
   postponed_count?: number;
   created_at: string;
 }

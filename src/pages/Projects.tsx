@@ -133,7 +133,10 @@ export default function Projects() {
   const toggleTodo = async (todo: AreaTodo) => {
     await supabase
       .from("todos")
-      .update({ completed: !todo.completed })
+      .update({
+        completed: !todo.completed,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", todo.id);
     setTodos((prev) =>
       prev.map((t) =>

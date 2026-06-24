@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../lib/supabase";
-import type { Message } from "../lib/types";
+import type { Message, Todo, Event } from "../lib/types";
 import MiJin from "../components/MiJin";
 import dayjs from "dayjs";
 
@@ -21,8 +21,8 @@ export default function AiChat({ onNavigate }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [todoCount, setTodoCount] = useState(0);
-  const [eventCount, setEventCount] = useState(0);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,18 +48,22 @@ export default function AiChat({ onNavigate }: Props) {
 
   const loadContext = async () => {
     const today = dayjs().format("YYYY-MM-DD");
-    const [{ count: tc }, { count: ec }] = await Promise.all([
+    const [{ data: t }, { data: e }] = await Promise.all([
       supabase
         .from("todos")
-        .select("*", { count: "exact", head: true })
-        .eq("completed", false),
+        .select("*")
+        .eq("completed", false)
+        .order("due_date", { ascending: true })
+        .limit(30),
       supabase
         .from("events")
-        .select("*", { count: "exact", head: true })
-        .gte("start_time", today),
+        .select("*")
+        .gte("start_time", today + "T00:00:00")
+        .order("start_time", { ascending: true })
+        .limit(20),
     ]);
-    setTodoCount(tc || 0);
-    setEventCount(ec || 0);
+    setTodos((t || []) as Todo[]);
+    setEvents((e || []) as Event[]);
   };
 
   const send = async () => {
@@ -85,12 +89,44 @@ export default function AiChat({ onNavigate }: Props) {
     setLoading(true);
     try {
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+      const todoList =
+        todos.length === 0
+          ? "없음"
+          : todos
+              .map((t) => {
+                const due = t.due_date
+                  ? ` (마감: ${dayjs(t.due_date).format("M/D")})`
+                  : "";
+                const priority =
+                  t.priority === "high"
+                    ? "🔴"
+                    : t.priority === "medium"
+                      ? "🟡"
+                      : "⚪";
+                return `${priority} ${t.title}${due}`;
+              })
+              .join("\n");
+
+      const eventList =
+        events.length === 0
+          ? "없음"
+          : events
+              .map(
+                (e) =>
+                  `- ${dayjs(e.start_time).format("M/D HH:mm")} ${e.title}${e.location ? ` (${e.location})` : ""}`,
+              )
+              .join("\n");
+
       const systemPrompt = `당신은 미진님의 전담 개인 비서입니다. 오늘은 ${dayjs().format("YYYY년 M월 D일 dddd")}입니다.
 
-현재 미진님 상황: 미완료 할일 ${todoCount}개, 예정 일정 ${eventCount}개
+【미진님의 할일 목록】
+${todoList}
+
+【앞으로의 일정】
+${eventList}
 
 비서로서 역할:
-- 미진님 대신 우선순위를 판단하고 "이것부터 하세요"처럼 구체적으로 알려줍니다
+- 위 할일과 일정을 실제로 파악해서 "이것부터 하세요"처럼 구체적으로 알려줍니다
 - 데드라인이 임박한 일, 놓치면 안 될 일을 먼저 짚어줍니다
 - 여유 시간이 생기면 그 시간에 맞는 일을 추천합니다
 - 평가하거나 분석하지 않고, 실제로 도움이 되는 행동만 제안합니다
@@ -129,8 +165,8 @@ export default function AiChat({ onNavigate }: Props) {
   };
 
   const greeting =
-    todoCount > 0 || eventCount > 0
-      ? `안녕하세요 미진님! 할일 ${todoCount}개, 일정 ${eventCount}개가 있어요.\n\n뭐부터 챙겨드릴까요?`
+    todos.length > 0 || events.length > 0
+      ? `안녕하세요 미진님! 할일 ${todos.length}개, 일정 ${events.length}개가 있어요.\n\n뭐부터 챙겨드릴까요?`
       : "안녕하세요 미진님! 오늘 필요한 거 뭐든지 말씀해 주세요.";
 
   const displayMessages =
@@ -163,7 +199,7 @@ export default function AiChat({ onNavigate }: Props) {
             letterSpacing: "-0.224px",
           }}
         >
-          미완료 할일 {todoCount}개 · 예정 일정 {eventCount}개
+          미완료 할일 {todos.length}개 · 예정 일정 {events.length}개
         </p>
       </div>
 

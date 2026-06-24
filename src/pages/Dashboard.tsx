@@ -249,6 +249,21 @@ export default function Dashboard({ onNavigate }: Props) {
                 >
                   {todo.title}
                 </span>
+                {(todo.postponed_count || 0) > 0 && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#ff9500",
+                      background: "#fff8ed",
+                      border: "1px solid #fcd34d",
+                      borderRadius: 4,
+                      padding: "1px 5px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {todo.postponed_count}번 미룸
+                  </span>
+                )}
                 {todo.due_date && (
                   <span
                     style={{

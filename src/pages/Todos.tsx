@@ -102,6 +102,28 @@ export default function Todos() {
     );
   };
 
+  const cancelPostpone = async (todo: Todo) => {
+    const prevDate = dayjs(todo.due_date)
+      .subtract(1, "day")
+      .format("YYYY-MM-DD");
+    const newCount = Math.max(0, (todo.postponed_count || 1) - 1);
+    await supabase
+      .from("todos")
+      .update({
+        due_date: prevDate,
+        postponed_count: newCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", todo.id);
+    setTodos((prev) =>
+      prev.map((t) =>
+        t.id === todo.id
+          ? { ...t, due_date: prevDate, postponed_count: newCount }
+          : t,
+      ),
+    );
+  };
+
   const save = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
@@ -392,6 +414,23 @@ export default function Todos() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {!todo.completed && (todo.postponed_count || 0) > 0 && (
+                  <button
+                    onClick={() => cancelPostpone(todo)}
+                    title="미룸 취소"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                    style={{
+                      fontSize: 14,
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#ff9500",
+                      padding: "2px 4px",
+                    }}
+                  >
+                    ↩
+                  </button>
+                )}
                 {!todo.completed && (
                   <button
                     onClick={() => postpone(todo)}

@@ -79,7 +79,7 @@ export interface ContentItem {
 
 export interface NewsItem {
   id: string;
-  category: "realestate" | "menopause";
+  category: "realestate" | "menopause" | "stocks";
   title: string;
   description: string;
   url: string;

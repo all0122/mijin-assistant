@@ -107,6 +107,7 @@ function ArticleList({
 export default function News() {
   const [realestate, setRealestate] = useState<NewsItem[]>([]);
   const [menopause, setMenopause] = useState<NewsItem[]>([]);
+  const [stocks, setStocks] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [fetchStep, setFetchStep] = useState("");
@@ -128,12 +129,14 @@ export default function News() {
     const items = (data || []) as NewsItem[];
     const re = items.filter((n) => n.category === "realestate");
     const mp = items.filter((n) => n.category === "menopause");
+    const st = items.filter((n) => n.category === "stocks");
 
     setRealestate(re);
     setMenopause(mp);
+    setStocks(st);
     setLoading(false);
 
-    if (re.length === 0 || mp.length === 0) {
+    if (re.length === 0 || mp.length === 0 || st.length === 0) {
       fetchNews();
     }
   }
@@ -160,12 +163,14 @@ export default function News() {
 
       // 네이버 뉴스 검색
       setFetchStep("뉴스 검색 중...");
-      const [re1, re2, re3, mp1, mp2] = await Promise.all([
-        naverSearch("부동산 동향"),
-        naverSearch("부동산 정책 규제"),
-        naverSearch("주식 시장 경제"),
-        naverSearch("갱년기"),
-        naverSearch("갱년기 호르몬 건강 롱제비티"),
+      const [re1, re2, mp1, mp2, mp3, st1, st2] = await Promise.all([
+        naverSearch("부동산 동향 정책"),
+        naverSearch("부동산 규제 시장 전망"),
+        naverSearch("갱년기 연구 의학 최신"),
+        naverSearch("폐경 호르몬 치료 임상 결과"),
+        naverSearch("갱년기 롱제비티 노화 여성 건강"),
+        naverSearch("주식 증시 시장 동향 오늘"),
+        naverSearch("미국 주식 나스닥 코스피 투자"),
       ]);
 
       const dedup = (arr: any[]) => {
@@ -178,8 +183,9 @@ export default function News() {
         });
       };
 
-      const reRaw = dedup([...re1, ...re2, ...re3]);
-      const mpRaw = dedup([...mp1, ...mp2]);
+      const reRaw = dedup([...re1, ...re2]);
+      const mpRaw = dedup([...mp1, ...mp2, ...mp3]);
+      const stRaw = dedup([...st1, ...st2]);
 
       // Claude가 상위 5개 선택
       setFetchStep("AI가 중요 뉴스 선별 중...");
@@ -187,7 +193,7 @@ export default function News() {
 
       const selectTop5 = async (
         articles: any[],
-        category: "realestate" | "menopause",
+        category: "realestate" | "menopause" | "stocks",
       ): Promise<any[]> => {
         if (articles.length === 0) return [];
         if (articles.length <= 5) return articles;
@@ -199,8 +205,10 @@ export default function News() {
 
         const prompt =
           category === "realestate"
-            ? `부동산/시장경제 뉴스 큐레이터입니다. 아래 기사 중 오늘 가장 중요한 부동산 동향, 정책/법 변경, 주식·시장 경제 뉴스 5개 번호를 JSON 배열로만 응답: [1,3,5,8,12]`
-            : `여성 건강 콘텐츠 큐레이터입니다. 아래 기사 중 갱년기 여성에게 가장 유익한 의학정보, 호르몬, 운동, 건강, 롱제비티 뉴스 5개 번호를 JSON 배열로만 응답: [1,3,5,8,12]`;
+            ? `부동산 전문 큐레이터입니다. 아래 기사 중 부동산 정책·법 변경, 시장 동향, 지역별 가격 변화 등 실질적으로 중요한 뉴스 5개 번호를 JSON 배열로만 응답: [1,3,5,8,12]`
+            : category === "stocks"
+              ? `주식 투자 전문 큐레이터입니다. 아래 기사 중 시장 동향, 주요 종목 분석, 경제 지표, 투자 인사이트가 담긴 뉴스 5개 번호를 JSON 배열로만 응답: [1,3,5,8,12]`
+              : `여성 건강 전문 큐레이터입니다. 아래 기사 중 갱년기·폐경 의학 연구, 호르몬 치료 임상 결과, 롱제비티·노화 방지, 전문가 의견이 담긴 뉴스 5개 번호를 JSON 배열로만 응답: [1,3,5,8,12]\n일반 건강 상식·연예인 기사는 제외하고 의학적 근거가 있는 전문 콘텐츠를 우선 선택하세요.`;
 
         const msg = await client.messages.create({
           model: "claude-haiku-4-5-20251001",
@@ -219,32 +227,28 @@ export default function News() {
           .filter(Boolean);
       };
 
-      const [selectedRE, selectedMP] = await Promise.all([
+      const [selectedRE, selectedMP, selectedST] = await Promise.all([
         selectTop5(reRaw, "realestate"),
         selectTop5(mpRaw, "menopause"),
+        selectTop5(stRaw, "stocks"),
       ]);
 
       // Supabase에 저장
       setFetchStep("저장 중...");
+      const toRow = (a: any, category: string) => ({
+        category,
+        title: stripHtml(a.title),
+        description: stripHtml(a.description || ""),
+        url: a.originallink || a.link,
+        naver_url: a.link,
+        published_at: a.pubDate || "",
+        fetched_date: today,
+      });
+
       const rows = [
-        ...selectedRE.map((a: any) => ({
-          category: "realestate",
-          title: stripHtml(a.title),
-          description: stripHtml(a.description || ""),
-          url: a.originallink || a.link,
-          naver_url: a.link,
-          published_at: a.pubDate || "",
-          fetched_date: today,
-        })),
-        ...selectedMP.map((a: any) => ({
-          category: "menopause",
-          title: stripHtml(a.title),
-          description: stripHtml(a.description || ""),
-          url: a.originallink || a.link,
-          naver_url: a.link,
-          published_at: a.pubDate || "",
-          fetched_date: today,
-        })),
+        ...selectedRE.map((a: any) => toRow(a, "realestate")),
+        ...selectedMP.map((a: any) => toRow(a, "menopause")),
+        ...selectedST.map((a: any) => toRow(a, "stocks")),
       ];
 
       if (rows.length > 0) {
@@ -255,6 +259,7 @@ export default function News() {
         const saved = (inserted || []) as NewsItem[];
         setRealestate(saved.filter((n) => n.category === "realestate"));
         setMenopause(saved.filter((n) => n.category === "menopause"));
+        setStocks(saved.filter((n) => n.category === "stocks"));
       }
     } catch (err: any) {
       setError(`뉴스를 가져오지 못했어요: ${err.message}`);
@@ -329,29 +334,6 @@ export default function News() {
         </div>
       ) : (
         <>
-          {/* 부동산·시장경제 */}
-          <section>
-            <h3
-              style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: "#1d1d1f",
-                letterSpacing: "-0.02em",
-                marginBottom: 12,
-              }}
-            >
-              📈 부동산 · 시장경제
-            </h3>
-            <ArticleList
-              items={realestate}
-              emptyMsg={
-                fetching
-                  ? "뉴스를 가져오고 있어요..."
-                  : "오늘의 뉴스를 가져오려면 위 버튼을 눌러주세요."
-              }
-            />
-          </section>
-
           {/* 갱년기·건강 */}
           <section>
             <h3
@@ -363,10 +345,56 @@ export default function News() {
                 marginBottom: 12,
               }}
             >
-              🌿 갱년기 · 건강
+              🌿 갱년기 · 건강 전문
             </h3>
             <ArticleList
               items={menopause}
+              emptyMsg={
+                fetching
+                  ? "뉴스를 가져오고 있어요..."
+                  : "오늘의 뉴스를 가져오려면 위 버튼을 눌러주세요."
+              }
+            />
+          </section>
+
+          {/* 주식·투자 */}
+          <section>
+            <h3
+              style={{
+                fontSize: 18,
+                fontWeight: 600,
+                color: "#1d1d1f",
+                letterSpacing: "-0.02em",
+                marginBottom: 12,
+              }}
+            >
+              📊 주식 · 투자
+            </h3>
+            <ArticleList
+              items={stocks}
+              emptyMsg={
+                fetching
+                  ? "뉴스를 가져오고 있어요..."
+                  : "오늘의 뉴스를 가져오려면 위 버튼을 눌러주세요."
+              }
+            />
+          </section>
+
+          {/* 부동산 */}
+          <section>
+            <h3
+              style={{
+                fontSize: 18,
+                fontWeight: 600,
+                color: "#1d1d1f",
+                letterSpacing: "-0.02em",
+                marginBottom: 12,
+              }}
+            >
+              🏠 부동산
+            </h3>
+            <ArticleList
+              items={realestate}
               emptyMsg={
                 fetching
                   ? "뉴스를 가져오고 있어요..."

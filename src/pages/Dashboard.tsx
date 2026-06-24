@@ -891,7 +891,11 @@ ${eventSummary}
                     flexShrink: 0,
                   }}
                 >
-                  {item.category === "realestate" ? "부동산" : "갱년기"}
+                  {item.category === "realestate"
+                    ? "부동산"
+                    : item.category === "stocks"
+                      ? "주식"
+                      : "갱년기"}
                 </span>
                 <span
                   style={{

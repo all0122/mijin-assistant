@@ -13,7 +13,6 @@ const nav: { id: Page; label: string; icon: string; badge?: string }[] = [
   { id: "calendar", label: "캘린더", icon: "📅" },
   { id: "todos", label: "할일", icon: "✅" },
   { id: "memos", label: "메모", icon: "📝" },
-  { id: "contacts", label: "연락처", icon: "👥" },
   { id: "ai", label: "AI 비서", icon: "🤖" },
 ];
 

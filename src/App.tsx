@@ -7,7 +7,6 @@ import Content from "./pages/Content";
 import Calendar from "./pages/Calendar";
 import Todos from "./pages/Todos";
 import Memos from "./pages/Memos";
-import Contacts from "./pages/Contacts";
 import AiChat from "./pages/AiChat";
 import Settings from "./pages/Settings";
 import News from "./pages/News";
@@ -30,8 +29,6 @@ export default function App() {
         return <Todos />;
       case "memos":
         return <Memos />;
-      case "contacts":
-        return <Contacts />;
       case "ai":
         return <AiChat onNavigate={(p) => setPage(p as Page)} />;
       case "news":

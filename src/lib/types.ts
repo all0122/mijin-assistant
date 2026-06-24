@@ -96,7 +96,6 @@ export type Page =
   | "calendar"
   | "todos"
   | "memos"
-  | "contacts"
   | "ai"
   | "news"
   | "settings";

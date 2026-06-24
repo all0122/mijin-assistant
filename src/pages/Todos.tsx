@@ -82,6 +82,26 @@ export default function Todos() {
     setTodos((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const postpone = async (todo: Todo) => {
+    const tomorrow = dayjs().add(1, "day").format("YYYY-MM-DD");
+    const newCount = (todo.postponed_count || 0) + 1;
+    await supabase
+      .from("todos")
+      .update({
+        due_date: tomorrow,
+        postponed_count: newCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", todo.id);
+    setTodos((prev) =>
+      prev.map((t) =>
+        t.id === todo.id
+          ? { ...t, due_date: tomorrow, postponed_count: newCount }
+          : t,
+      ),
+    );
+  };
+
   const save = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
@@ -355,22 +375,55 @@ export default function Todos() {
                       {dayjs(todo.due_date).format("M월 D일")}
                     </span>
                   )}
+                  {(todo.postponed_count || 0) > 0 && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "#ff9500",
+                        background: "#fff8ed",
+                        border: "1px solid #fcd34d",
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                      }}
+                    >
+                      {todo.postponed_count}번 미룸
+                    </span>
+                  )}
                 </div>
               </div>
-              <button
-                onClick={() => remove(todo.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{
-                  color: "#cccccc",
-                  fontSize: 20,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {!todo.completed && (
+                  <button
+                    onClick={() => postpone(todo)}
+                    title="내일로 미루기"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{
+                      fontSize: 14,
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#ff9500",
+                      padding: "2px 4px",
+                    }}
+                  >
+                    →내일
+                  </button>
+                )}
+                <button
+                  onClick={() => remove(todo.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{
+                    color: "#cccccc",
+                    fontSize: 20,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
           ))}
         </div>

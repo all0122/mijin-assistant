@@ -6,6 +6,7 @@ export interface Event {
   end_time?: string;
   location?: string;
   color: string;
+  completed?: boolean;
   created_at: string;
 }
 
@@ -17,6 +18,7 @@ export interface Todo {
   completed: boolean;
   priority: "low" | "medium" | "high";
   project?: string;
+  postponed_count?: number;
   created_at: string;
 }
 

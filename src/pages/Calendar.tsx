@@ -38,6 +38,7 @@ interface UnifiedEvent {
   description?: string;
   source: "local" | "google";
   color?: string;
+  completed?: boolean;
 }
 
 const emptyForm = () => ({
@@ -85,6 +86,7 @@ export default function Calendar() {
         description: e.description,
         source: "local",
         color: e.color,
+        completed: e.completed || false,
       }),
     );
 
@@ -97,7 +99,7 @@ export default function Calendar() {
         start.toISOString(),
         end.toISOString(),
       );
-      if (error) setGoogleError(error);
+      if (error && error !== "TOKEN_REFRESHING") setGoogleError(error);
       googleEvents = gEvents.map((e) => ({
         id: `g_${e.id}`,
         title: e.summary || "(제목 없음)",
@@ -213,6 +215,18 @@ export default function Calendar() {
     }
   };
 
+  const toggleComplete = async (ev: UnifiedEvent) => {
+    if (ev.source !== "local") return;
+    const next = !ev.completed;
+    await supabase.from("events").update({ completed: next }).eq("id", ev.id);
+    setEvents((prev) =>
+      prev.map((e) => (e.id === ev.id ? { ...e, completed: next } : e)),
+    );
+    setSelected((prev) =>
+      prev?.id === ev.id ? { ...prev, completed: next } : prev,
+    );
+  };
+
   const remove = async (ev: UnifiedEvent) => {
     if (ev.source === "local") {
       await supabase.from("events").delete().eq("id", ev.id);
@@ -304,13 +318,21 @@ export default function Calendar() {
       {googleError && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-sm">
           {googleError === "TOKEN_EXPIRED" ? (
-            <div>
-              <span className="font-semibold text-amber-700">
-                ⚠️ 로그인 만료
-              </span>
-              <p className="text-amber-600 mt-1">
-                연결 해제 후 다시 구글 연결을 해주세요.
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-amber-700">
+                  ⚠️ 구글 로그인 만료
+                </span>
+                <p className="text-amber-600 mt-1 text-xs">
+                  아래 버튼을 눌러 다시 연결해 주세요.
+                </p>
+              </div>
+              <button
+                onClick={connectGoogle}
+                className="ml-4 text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 shrink-0"
+              >
+                다시 연결
+              </button>
             </div>
           ) : googleError === "GAPI_NOT_READY" ? (
             <p className="text-amber-600">
@@ -567,9 +589,21 @@ export default function Calendar() {
                   : "💾 앱 내 일정"}
               </div>
             </div>
+            {selected.source === "local" && (
+              <button
+                onClick={() => toggleComplete(selected)}
+                className={`mt-4 w-full text-sm py-2 rounded-lg border transition-colors ${
+                  selected.completed
+                    ? "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                    : "text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {selected.completed ? "✓ 완료됨 — 취소하기" : "완료로 표시"}
+              </button>
+            )}
             <button
               onClick={() => remove(selected)}
-              className="mt-4 w-full text-sm py-2 rounded-lg text-red-500 border border-red-200 hover:bg-red-50"
+              className="mt-2 w-full text-sm py-2 rounded-lg text-red-500 border border-red-200 hover:bg-red-50"
             >
               삭제
             </button>
@@ -600,7 +634,13 @@ export default function Calendar() {
                   style={ev.source === "google" ? getEventDot(ev) : {}}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-700 truncate flex items-center gap-1">
+                  <div
+                    className="text-sm font-medium truncate flex items-center gap-1"
+                    style={{
+                      color: ev.completed ? "#aeaeb2" : "#374151",
+                      textDecoration: ev.completed ? "line-through" : "none",
+                    }}
+                  >
                     {ev.source === "google" && (
                       <img
                         src="https://www.google.com/favicon.ico"
@@ -608,6 +648,7 @@ export default function Calendar() {
                         alt=""
                       />
                     )}
+                    {ev.completed && "✓ "}
                     {ev.title}
                   </div>
                   <div className="text-xs text-slate-400">

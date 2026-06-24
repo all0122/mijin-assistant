@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../lib/supabase";
 import * as gcal from "../lib/googleCalendar";
-import type { Message, Todo, Event } from "../lib/types";
+import type { Message, Todo, Event, Memo } from "../lib/types";
 import MiJin from "../components/MiJin";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
@@ -11,8 +11,8 @@ dayjs.locale("ko");
 const QUICK = [
   "이번 주 제일 중요한 게 뭐야?",
   "데드라인 임박한 거 알려줘",
-  "지금 뭐 하면 좋을까?",
-  "오늘 시간 계획 짜줘",
+  "최근 메모 보고 인스타 아이디어 뽑아줘",
+  "짬시간에 뭘 하면 좋을까?",
 ];
 
 interface Props {
@@ -26,6 +26,7 @@ export default function AiChat({ onNavigate }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [memos, setMemos] = useState<Memo[]>([]);
   const [googleEvents, setGoogleEvents] = useState<
     { title: string; start: string; location?: string }[]
   >([]);
@@ -54,7 +55,7 @@ export default function AiChat({ onNavigate }: Props) {
 
   const loadContext = async () => {
     const today = dayjs().format("YYYY-MM-DD");
-    const [{ data: t }, { data: e }] = await Promise.all([
+    const [{ data: t }, { data: e }, { data: m }] = await Promise.all([
       supabase
         .from("todos")
         .select("*")
@@ -67,9 +68,15 @@ export default function AiChat({ onNavigate }: Props) {
         .gte("start_time", today + "T00:00:00")
         .order("start_time", { ascending: true })
         .limit(20),
+      supabase
+        .from("memos")
+        .select("id, title, content, tags, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
     setTodos((t || []) as Todo[]);
     setEvents((e || []) as Event[]);
+    setMemos((m || []) as Memo[]);
 
     // 구글 캘린더 연결된 경우 이벤트 추가 로드
     if (gcal.isConnected()) {
@@ -156,6 +163,16 @@ export default function AiChat({ onNavigate }: Props) {
           ? [supabaseEventList, googleEventList].filter(Boolean).join("\n")
           : "없음";
 
+      const memoList =
+        memos.length === 0
+          ? "없음"
+          : memos
+              .map(
+                (m) =>
+                  `- ${m.title ? `[${m.title}] ` : ""}${m.content.slice(0, 150)}${m.content.length > 150 ? "..." : ""} (${dayjs(m.created_at).format("M/D")})`,
+              )
+              .join("\n");
+
       const systemPrompt = `당신은 미진님의 전담 개인 비서입니다. 지금은 ${dayjs().format("YYYY년 M월 D일 dddd A h시 mm분")}입니다.
 
 【미진님의 할일 목록】
@@ -163,6 +180,9 @@ ${todoList}
 
 【앞으로의 일정 (앱 + 구글 캘린더)】
 ${eventList}
+
+【최근 메모 (아이디어/기록)】
+${memoList}
 
 비서로서 역할:
 - 위 할일과 일정을 실제로 파악해서 "이것부터 하세요"처럼 구체적으로 알려줍니다
@@ -238,7 +258,8 @@ ${eventList}
             letterSpacing: "-0.224px",
           }}
         >
-          미완료 할일 {todos.length}개 · 예정 일정 {events.length}개
+          미완료 할일 {todos.length}개 · 예정 일정 {events.length}개 · 메모{" "}
+          {memos.length}개
         </p>
       </div>
 

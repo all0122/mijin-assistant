@@ -163,21 +163,37 @@ export default function Projects() {
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
       // 전체 할일 요약
-      const todosSummary = areas
-        .map((area) => {
-          const areaTodos = todosForArea(area.id);
-          const active = areaTodos.filter((t) => !t.completed);
-          const done = areaTodos.filter((t) => t.completed).length;
-          return `## ${area.icon} ${area.name}\n설명: ${area.description}\n미완료: ${active.length}개, 완료: ${done}개\n할일 목록:\n${
-            active
+      const personalTodos = todos.filter(
+        (t) =>
+          !t.completed &&
+          !t.area_id &&
+          !areas.some((a) => a.name === t.project),
+      );
+      const personalSection =
+        personalTodos.length > 0
+          ? `\n\n## 🗓️ 개인 할일\n설명: 특정 업무영역에 속하지 않는 개인 할일\n미완료: ${personalTodos.length}개\n할일 목록:\n${personalTodos
               .map(
                 (t) =>
                   `- [${t.priority}] ${t.title}${t.due_date ? ` (마감: ${t.due_date})` : ""}`,
               )
-              .join("\n") || "없음"
-          }`;
-        })
-        .join("\n\n");
+              .join("\n")}`
+          : "";
+      const todosSummary =
+        areas
+          .map((area) => {
+            const areaTodos = todosForArea(area.id);
+            const active = areaTodos.filter((t) => !t.completed);
+            const done = areaTodos.filter((t) => t.completed).length;
+            return `## ${area.icon} ${area.name}\n설명: ${area.description}\n미완료: ${active.length}개, 완료: ${done}개\n할일 목록:\n${
+              active
+                .map(
+                  (t) =>
+                    `- [${t.priority}] ${t.title}${t.due_date ? ` (마감: ${t.due_date})` : ""}`,
+                )
+                .join("\n") || "없음"
+            }`;
+          })
+          .join("\n\n") + personalSection;
 
       const today = dayjs().format("YYYY년 M월 D일");
 

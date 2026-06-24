@@ -23,15 +23,19 @@ export default function Dashboard({ onNavigate }: Props) {
   const [loading, setLoading] = useState(true);
 
   const loadSuggestion = async (
-    todoData: Todo[],
     eventData: Event[],
+    allTodos: Todo[],
+    areasData: Area[],
     today: string,
+    force = false,
   ) => {
     const cacheKey = `dashboard_suggestion_${today}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      setSuggestion(cached);
-      return;
+    if (!force) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setSuggestion(cached);
+        return;
+      }
     }
     const apiKey = localStorage.getItem("anthropic_api_key");
     if (!apiKey) return;
@@ -39,23 +43,70 @@ export default function Dashboard({ onNavigate }: Props) {
     setSuggestionLoading(true);
     try {
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-      const overdue = todoData.filter(
+
+      const overdue = allTodos.filter(
         (t) => t.due_date && dayjs(t.due_date).isBefore(dayjs(), "day"),
       );
-      const todayDue = todoData.filter(
+      const todayDue = allTodos.filter(
         (t) => t.due_date && t.due_date === today,
       );
+
+      const byArea = areasData
+        .map((area) => {
+          const areaTodos = allTodos.filter(
+            (t) =>
+              t.area_id === area.id || (t.project === area.name && !t.area_id),
+          );
+          if (areaTodos.length === 0) return null;
+          return `[${area.icon} ${area.name}]\n${areaTodos
+            .map(
+              (t) =>
+                `- [${t.priority}] ${t.title}${t.due_date ? ` (마감: ${dayjs(t.due_date).format("M/D")})` : ""}`,
+            )
+            .join("\n")}`;
+        })
+        .filter(Boolean) as string[];
+
+      const personalTodos = allTodos.filter(
+        (t) => !t.area_id && !areasData.some((a) => a.name === t.project),
+      );
+      if (personalTodos.length > 0) {
+        byArea.push(
+          `[🗓️ 개인]\n${personalTodos
+            .map(
+              (t) =>
+                `- [${t.priority}] ${t.title}${t.due_date ? ` (마감: ${dayjs(t.due_date).format("M/D")})` : ""}`,
+            )
+            .join("\n")}`,
+        );
+      }
+
+      const todoSummary = byArea.join("\n\n") || "없음";
+      const eventSummary =
+        eventData
+          .map((e) => `- ${dayjs(e.start_time).format("HH:mm")} ${e.title}`)
+          .join("\n") || "없음";
+
       const prompt = `지금은 ${dayjs().format("YYYY년 M월 D일 dddd A h시 mm분")}입니다.
 
-기한 초과 할일: ${overdue.map((t) => t.title).join(", ") || "없음"}
-오늘 마감 할일: ${todayDue.map((t) => t.title).join(", ") || "없음"}
-오늘 일정: ${eventData.map((e) => `${dayjs(e.start_time).format("HH:mm")} ${e.title}`).join(", ") || "없음"}
+【전체 미완료 할일】
+${todoSummary}
 
-미진님 상황을 보고 지금 가장 먼저 해야 할 일을 한 문장으로 짧게 말해줘. 친근하고 구체적으로.`;
+【오늘 일정】
+${eventSummary}
+
+기한 초과: ${overdue.map((t) => t.title).join(", ") || "없음"}
+오늘 마감: ${todayDue.map((t) => t.title).join(", ") || "없음"}
+
+미진님의 전체 상황을 보고 다음을 알려줘:
+1. **오늘 최우선 TOP 3** — 각각 이유 한 줄
+2. **짬시간(5~10분)에 할 수 있는 것 1가지**
+
+간결하게 번호 리스트로, 친근하게 작성해줘.`;
 
       const response = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 100,
+        max_tokens: 400,
         messages: [{ role: "user", content: prompt }],
       });
       const text =
@@ -67,6 +118,12 @@ export default function Dashboard({ onNavigate }: Props) {
     } finally {
       setSuggestionLoading(false);
     }
+  };
+
+  const refreshSuggestion = () => {
+    const today = dayjs().format("YYYY-MM-DD");
+    localStorage.removeItem(`dashboard_suggestion_${today}`);
+    loadSuggestion(events, allPendingTodos, areas, today, true);
   };
 
   useEffect(() => {
@@ -115,14 +172,16 @@ export default function Dashboard({ onNavigate }: Props) {
           .order("sort_order"),
         supabase
           .from("todos")
-          .select("id, title, area_id, project")
+          .select("id, title, area_id, project, priority, due_date")
           .eq("completed", false),
       ]);
-      setAreas((aData || []) as Area[]);
-      setAllPendingTodos((allT || []) as Todo[]);
+      const areasData = (aData || []) as Area[];
+      const allTodos = (allT || []) as Todo[];
+      setAreas(areasData);
+      setAllPendingTodos(allTodos);
 
       setLoading(false);
-      loadSuggestion(todoData, eventData, today);
+      loadSuggestion(eventData, allTodos, areasData, today);
     }
     load();
   }, []);
@@ -207,14 +266,33 @@ export default function Dashboard({ onNavigate }: Props) {
           }}
         >
           <div
-            style={{
-              fontSize: 12,
-              color: "#0066cc",
-              marginBottom: 4,
-              letterSpacing: "-0.224px",
-            }}
+            className="flex items-center justify-between"
+            style={{ marginBottom: 4 }}
           >
-            💡 오늘의 제안
+            <div
+              style={{
+                fontSize: 12,
+                color: "#0066cc",
+                letterSpacing: "-0.224px",
+              }}
+            >
+              💡 오늘의 제안 (TOP 3 + 짬시간)
+            </div>
+            <button
+              onClick={refreshSuggestion}
+              disabled={suggestionLoading}
+              style={{
+                fontSize: 12,
+                color: "#0066cc",
+                background: "none",
+                border: "none",
+                cursor: suggestionLoading ? "default" : "pointer",
+                opacity: suggestionLoading ? 0.4 : 1,
+                padding: 0,
+              }}
+            >
+              다시 생성
+            </button>
           </div>
           {suggestionLoading ? (
             <div style={{ fontSize: 14, color: "#7a7a7a" }}>생성 중...</div>

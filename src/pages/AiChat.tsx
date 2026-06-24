@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../lib/supabase";
+import * as gcal from "../lib/googleCalendar";
 import type { Message, Todo, Event } from "../lib/types";
 import MiJin from "../components/MiJin";
 import dayjs from "dayjs";
@@ -25,6 +26,9 @@ export default function AiChat({ onNavigate }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [googleEvents, setGoogleEvents] = useState<
+    { title: string; start: string; location?: string }[]
+  >([]);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -66,6 +70,30 @@ export default function AiChat({ onNavigate }: Props) {
     ]);
     setTodos((t || []) as Todo[]);
     setEvents((e || []) as Event[]);
+
+    // 구글 캘린더 연결된 경우 이벤트 추가 로드
+    if (gcal.isConnected()) {
+      try {
+        const clientId = gcal.getClientId();
+        if (clientId && window.gapi) {
+          await gcal.initGapi();
+          gcal.initGis(clientId);
+        }
+        const { events: gEvents } = await gcal.fetchEvents(
+          dayjs().toISOString(),
+          dayjs().add(30, "day").toISOString(),
+        );
+        setGoogleEvents(
+          gEvents.map((ev) => ({
+            title: ev.summary || "(제목 없음)",
+            start: ev.start.dateTime || ev.start.date || "",
+            location: ev.location,
+          })),
+        );
+      } catch {
+        // 구글 캘린더 로드 실패 시 무시
+      }
+    }
   };
 
   const send = async () => {
@@ -109,22 +137,31 @@ export default function AiChat({ onNavigate }: Props) {
               })
               .join("\n");
 
+      const supabaseEventList = events
+        .map(
+          (e) =>
+            `- ${dayjs(e.start_time).format("M/D HH:mm")} ${e.title}${e.location ? ` (${e.location})` : ""}`,
+        )
+        .join("\n");
+
+      const googleEventList = googleEvents
+        .map(
+          (e) =>
+            `- ${dayjs(e.start).format("M/D HH:mm")} ${e.title}${e.location ? ` (${e.location})` : ""}`,
+        )
+        .join("\n");
+
       const eventList =
-        events.length === 0
-          ? "없음"
-          : events
-              .map(
-                (e) =>
-                  `- ${dayjs(e.start_time).format("M/D HH:mm")} ${e.title}${e.location ? ` (${e.location})` : ""}`,
-              )
-              .join("\n");
+        supabaseEventList || googleEventList
+          ? [supabaseEventList, googleEventList].filter(Boolean).join("\n")
+          : "없음";
 
       const systemPrompt = `당신은 미진님의 전담 개인 비서입니다. 지금은 ${dayjs().format("YYYY년 M월 D일 dddd A h시 mm분")}입니다.
 
 【미진님의 할일 목록】
 ${todoList}
 
-【앞으로의 일정】
+【앞으로의 일정 (앱 + 구글 캘린더)】
 ${eventList}
 
 비서로서 역할:

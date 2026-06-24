@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "../lib/supabase";
 import type { Todo, Event, NewsItem } from "../lib/types";
 import dayjs from "dayjs";
@@ -15,7 +16,56 @@ export default function Dashboard({ onNavigate }: Props) {
   const [doneTodos, setDoneTodos] = useState<Todo[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [newsPreview, setNewsPreview] = useState<NewsItem[]>([]);
+  const [suggestion, setSuggestion] = useState<string>("");
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const loadSuggestion = async (
+    todoData: Todo[],
+    eventData: Event[],
+    today: string,
+  ) => {
+    const cacheKey = `dashboard_suggestion_${today}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      setSuggestion(cached);
+      return;
+    }
+    const apiKey = localStorage.getItem("anthropic_api_key");
+    if (!apiKey) return;
+
+    setSuggestionLoading(true);
+    try {
+      const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+      const overdue = todoData.filter(
+        (t) => t.due_date && dayjs(t.due_date).isBefore(dayjs(), "day"),
+      );
+      const todayDue = todoData.filter(
+        (t) => t.due_date && t.due_date === today,
+      );
+      const prompt = `지금은 ${dayjs().format("YYYY년 M월 D일 dddd A h시 mm분")}입니다.
+
+기한 초과 할일: ${overdue.map((t) => t.title).join(", ") || "없음"}
+오늘 마감 할일: ${todayDue.map((t) => t.title).join(", ") || "없음"}
+오늘 일정: ${eventData.map((e) => `${dayjs(e.start_time).format("HH:mm")} ${e.title}`).join(", ") || "없음"}
+
+미진님 상황을 보고 지금 가장 먼저 해야 할 일을 한 문장으로 짧게 말해줘. 친근하고 구체적으로.`;
+
+      const response = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 100,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const text =
+        response.content[0].type === "text" ? response.content[0].text : "";
+      localStorage.setItem(cacheKey, text);
+      setSuggestion(text);
+    } catch {
+      /* 실패 시 무시 */
+    } finally {
+      setSuggestionLoading(false);
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -48,11 +98,14 @@ export default function Dashboard({ onNavigate }: Props) {
             .order("created_at", { ascending: true })
             .limit(4),
         ]);
-      setTodos(t || []);
+      const todoData = (t || []) as Todo[];
+      const eventData = (e || []) as Event[];
+      setTodos(todoData);
       setDoneTodos(done || []);
-      setEvents(e || []);
+      setEvents(eventData);
       setNewsPreview((news || []) as NewsItem[]);
       setLoading(false);
+      loadSuggestion(todoData, eventData, today);
     }
     load();
   }, []);
@@ -62,12 +115,6 @@ export default function Dashboard({ onNavigate }: Props) {
     if (h < 12) return "좋은 아침이에요";
     if (h < 18) return "좋은 오후예요";
     return "좋은 저녁이에요";
-  };
-
-  const priorityLabel: Record<string, string> = {
-    high: "높음",
-    medium: "보통",
-    low: "낮음",
   };
 
   const priorityColor: Record<string, string> = {
@@ -85,6 +132,22 @@ export default function Dashboard({ onNavigate }: Props) {
         불러오는 중...
       </div>
     );
+
+  const today = dayjs().format("YYYY-MM-DD");
+  const overdueTodos = todos.filter(
+    (t) => t.due_date && dayjs(t.due_date).isBefore(dayjs(), "day"),
+  );
+  const todayDueTodos = todos.filter((t) => t.due_date && t.due_date === today);
+  const urgentTodos = [
+    ...overdueTodos,
+    ...todayDueTodos.filter((t) => !overdueTodos.find((o) => o.id === t.id)),
+  ];
+  const regularTodos = todos.filter(
+    (t) => !t.due_date || dayjs(t.due_date).isAfter(dayjs(), "day"),
+  );
+  const displayEvents = events.filter(
+    (ev) => !ev.completed || dayjs(ev.start_time).isSame(dayjs(), "day"),
+  );
 
   return (
     <div className="max-w-2xl mx-auto py-10 px-6 space-y-10">
@@ -116,42 +179,116 @@ export default function Dashboard({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* 요약 카드 */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* AI 오늘의 제안 */}
+      {(suggestion || suggestionLoading) && (
+        <div
+          style={{
+            background: "#f0f7ff",
+            border: "1px solid #bfd7f7",
+            borderRadius: 14,
+            padding: "14px 18px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              color: "#0066cc",
+              marginBottom: 4,
+              letterSpacing: "-0.224px",
+            }}
+          >
+            💡 오늘의 제안
+          </div>
+          {suggestionLoading ? (
+            <div style={{ fontSize: 14, color: "#7a7a7a" }}>생성 중...</div>
+          ) : (
+            <div
+              style={{
+                fontSize: 15,
+                color: "#1d1d1f",
+                lineHeight: 1.5,
+                letterSpacing: "-0.224px",
+              }}
+            >
+              {suggestion}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 요약 카드 3개 */}
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => onNavigate("todos")}
-          className="text-left p-6 transition-all active:scale-95"
+          className="text-left p-4 transition-all active:scale-95"
           style={{
-            background: "#ffffff",
-            border: "1px solid #e0e0e0",
+            background: overdueTodos.length > 0 ? "#fff5f5" : "#ffffff",
+            border:
+              overdueTodos.length > 0
+                ? "1.5px solid #ff3b30"
+                : "1px solid #e0e0e0",
             borderRadius: 18,
           }}
         >
           <div
             style={{
-              fontSize: 40,
+              fontSize: 34,
               fontWeight: 600,
-              color: "#0066cc",
+              color: overdueTodos.length > 0 ? "#ff3b30" : "#7a7a7a",
               letterSpacing: "-0.02em",
               lineHeight: 1,
             }}
           >
-            {todos.length}
+            {overdueTodos.length}
           </div>
           <div
             className="mt-2"
             style={{
-              fontSize: 14,
-              color: "#7a7a7a",
+              fontSize: 12,
+              color: overdueTodos.length > 0 ? "#ff3b30" : "#7a7a7a",
               letterSpacing: "-0.224px",
             }}
           >
-            남은 할일
+            기한 초과
+          </div>
+        </button>
+        <button
+          onClick={() => onNavigate("todos")}
+          className="text-left p-4 transition-all active:scale-95"
+          style={{
+            background: todayDueTodos.length > 0 ? "#fff8ed" : "#ffffff",
+            border:
+              todayDueTodos.length > 0
+                ? "1.5px solid #ff9500"
+                : "1px solid #e0e0e0",
+            borderRadius: 18,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 34,
+              fontWeight: 600,
+              color: todayDueTodos.length > 0 ? "#ff9500" : "#7a7a7a",
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+            }}
+          >
+            {todayDueTodos.length}
+          </div>
+          <div
+            className="mt-2"
+            style={{
+              fontSize: 12,
+              color: todayDueTodos.length > 0 ? "#ff9500" : "#7a7a7a",
+              letterSpacing: "-0.224px",
+            }}
+          >
+            오늘 마감
           </div>
         </button>
         <button
           onClick={() => onNavigate("calendar")}
-          className="text-left p-6 transition-all active:scale-95"
+          className="text-left p-4 transition-all active:scale-95"
           style={{
             background: "#ffffff",
             border: "1px solid #e0e0e0",
@@ -160,29 +297,29 @@ export default function Dashboard({ onNavigate }: Props) {
         >
           <div
             style={{
-              fontSize: 40,
+              fontSize: 34,
               fontWeight: 600,
               color: "#0066cc",
               letterSpacing: "-0.02em",
               lineHeight: 1,
             }}
           >
-            {events.length}
+            {displayEvents.length}
           </div>
           <div
             className="mt-2"
             style={{
-              fontSize: 14,
+              fontSize: 12,
               color: "#7a7a7a",
               letterSpacing: "-0.224px",
             }}
           >
-            예정된 일정
+            예정 일정
           </div>
         </button>
       </div>
 
-      {/* 미완료 할일 */}
+      {/* 할일 */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3
@@ -206,6 +343,7 @@ export default function Dashboard({ onNavigate }: Props) {
             전체 보기
           </button>
         </div>
+
         {todos.length === 0 ? (
           <p
             style={{
@@ -219,69 +357,141 @@ export default function Dashboard({ onNavigate }: Props) {
             할일이 없어요!
           </p>
         ) : (
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e0e0e0",
-              borderRadius: 18,
-              overflow: "hidden",
-            }}
-          >
-            {todos.map((todo, i) => (
+          <div className="space-y-3">
+            {/* 긴급 섹션 */}
+            {urgentTodos.length > 0 && (
               <div
-                key={todo.id}
-                className="flex items-center gap-4 px-5 py-4"
                 style={{
-                  borderTop: i > 0 ? "1px solid #f0f0f0" : "none",
+                  background: "#fff5f5",
+                  border: "1.5px solid #ff3b30",
+                  borderRadius: 18,
+                  overflow: "hidden",
                 }}
               >
                 <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: priorityColor[todo.priority] }}
-                />
-                <span
-                  className="flex-1"
                   style={{
-                    fontSize: 17,
-                    color: "#1d1d1f",
-                    letterSpacing: "-0.374px",
+                    padding: "8px 20px 4px",
+                    fontSize: 11,
+                    color: "#ff3b30",
+                    letterSpacing: "-0.224px",
                   }}
                 >
-                  {todo.title}
-                </span>
-                {(todo.postponed_count || 0) > 0 && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "#ff9500",
-                      background: "#fff8ed",
-                      border: "1px solid #fcd34d",
-                      borderRadius: 4,
-                      padding: "1px 5px",
-                      whiteSpace: "nowrap",
-                    }}
+                  🔴 지금 처리해야 할 항목
+                </div>
+                {urgentTodos.map((todo, i) => (
+                  <div
+                    key={todo.id}
+                    className="flex items-center gap-3 px-5 py-3"
+                    style={{ borderTop: i > 0 ? "1px solid #ffe0e0" : "none" }}
                   >
-                    {todo.postponed_count}번 미룸
-                  </span>
-                )}
-                {todo.due_date && (
-                  <span
-                    style={{
-                      fontSize: 14,
-                      color: "#7a7a7a",
-                      letterSpacing: "-0.224px",
-                    }}
-                  >
-                    {dayjs(todo.due_date).format("M/D")}
-                  </span>
-                )}
-                <span
-                  style={{ fontSize: 12, color: priorityColor[todo.priority] }}
-                >
-                  {priorityLabel[todo.priority]}
-                </span>
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: priorityColor[todo.priority] }}
+                    />
+                    <span
+                      className="flex-1 truncate"
+                      style={{
+                        fontSize: 16,
+                        color: "#1d1d1f",
+                        letterSpacing: "-0.374px",
+                      }}
+                    >
+                      {todo.title}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(todo.postponed_count || 0) > 0 && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#ff9500",
+                            background: "#fff8ed",
+                            border: "1px solid #fcd34d",
+                            borderRadius: 4,
+                            padding: "1px 5px",
+                          }}
+                        >
+                          {todo.postponed_count}번 미룸
+                        </span>
+                      )}
+                      {todo.due_date && (
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: dayjs(todo.due_date).isBefore(dayjs(), "day")
+                              ? "#ff3b30"
+                              : "#ff9500",
+                          }}
+                        >
+                          {dayjs(todo.due_date).format("M/D")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {/* 일반 할일 */}
+            {regularTodos.length > 0 && (
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 18,
+                  overflow: "hidden",
+                }}
+              >
+                {regularTodos.map((todo, i) => (
+                  <div
+                    key={todo.id}
+                    className="flex items-center gap-3 px-5 py-4"
+                    style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: priorityColor[todo.priority] }}
+                    />
+                    <span
+                      className="flex-1 truncate"
+                      style={{
+                        fontSize: 17,
+                        color: "#1d1d1f",
+                        letterSpacing: "-0.374px",
+                      }}
+                    >
+                      {todo.title}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(todo.postponed_count || 0) > 0 && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#ff9500",
+                            background: "#fff8ed",
+                            border: "1px solid #fcd34d",
+                            borderRadius: 4,
+                            padding: "1px 5px",
+                          }}
+                        >
+                          {todo.postponed_count}번 미룸
+                        </span>
+                      )}
+                      {todo.due_date && (
+                        <span
+                          style={{
+                            fontSize: 14,
+                            color: "#7a7a7a",
+                            letterSpacing: "-0.224px",
+                          }}
+                        >
+                          {dayjs(todo.due_date).format("M/D")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -310,74 +520,68 @@ export default function Dashboard({ onNavigate }: Props) {
             전체 보기
           </button>
         </div>
-        {(() => {
-          const today = dayjs().startOf("day");
-          const displayEvents = events.filter(
-            (ev) => !ev.completed || dayjs(ev.start_time).isSame(today, "day"),
-          );
-          return displayEvents.length === 0 ? (
-            <p
-              style={{
-                fontSize: 17,
-                color: "#7a7a7a",
-                textAlign: "center",
-                padding: "32px 0",
-              }}
-            >
-              예정된 일정이 없어요
-            </p>
-          ) : (
-            <div
-              style={{
-                background: "#ffffff",
-                border: "1px solid #e0e0e0",
-                borderRadius: 18,
-                overflow: "hidden",
-              }}
-            >
-              {displayEvents.map((ev, i) => (
+        {displayEvents.length === 0 ? (
+          <p
+            style={{
+              fontSize: 17,
+              color: "#7a7a7a",
+              textAlign: "center",
+              padding: "32px 0",
+            }}
+          >
+            예정된 일정이 없어요
+          </p>
+        ) : (
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e0e0e0",
+              borderRadius: 18,
+              overflow: "hidden",
+            }}
+          >
+            {displayEvents.map((ev, i) => (
+              <div
+                key={ev.id}
+                className="flex items-center gap-4 px-5 py-4"
+                style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}
+              >
                 <div
-                  key={ev.id}
-                  className="flex items-center gap-4 px-5 py-4"
-                  style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}
-                >
+                  className="w-1 rounded-full shrink-0"
+                  style={{
+                    height: 40,
+                    background: ev.completed ? "#cccccc" : "#0066cc",
+                  }}
+                />
+                <div className="flex-1 min-w-0">
                   <div
-                    className="w-1 rounded-full shrink-0"
                     style={{
-                      height: 40,
-                      background: ev.completed ? "#cccccc" : "#0066cc",
+                      fontSize: 17,
+                      letterSpacing: "-0.374px",
+                      color: ev.completed ? "#7a7a7a" : "#1d1d1f",
+                      textDecoration: ev.completed ? "line-through" : "none",
                     }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div
-                      style={{
-                        fontSize: 17,
-                        color: ev.completed ? "#7a7a7a" : "#1d1d1f",
-                        letterSpacing: "-0.374px",
-                        textDecoration: ev.completed ? "line-through" : "none",
-                      }}
-                      className="truncate"
-                    >
-                      {ev.completed && "✓ "}
-                      {ev.title}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 14,
-                        color: "#7a7a7a",
-                        letterSpacing: "-0.224px",
-                        marginTop: 2,
-                      }}
-                    >
-                      {dayjs(ev.start_time).format("M월 D일 HH:mm")}
-                      {ev.location && ` · ${ev.location}`}
-                    </div>
+                    className="truncate"
+                  >
+                    {ev.completed && "✓ "}
+                    {ev.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      color: "#7a7a7a",
+                      letterSpacing: "-0.224px",
+                      marginTop: 2,
+                    }}
+                  >
+                    {dayjs(ev.start_time).format("M월 D일 HH:mm")}
+                    {ev.location && ` · ${ev.location}`}
                   </div>
                 </div>
-              ))}
-            </div>
-          );
-        })()}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 오늘 완료한 항목 */}
@@ -438,7 +642,7 @@ export default function Dashboard({ onNavigate }: Props) {
         </section>
       )}
 
-      {/* 오늘의 뉴스 미리보기 */}
+      {/* 오늘의 뉴스 */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3
